@@ -1,11 +1,3 @@
-# ==========================================================================
-# Script para Excluir uma Branch no Bitbucket
-# Criado por: Cleverson Rodrigues
-# Data: 05/06/2024
-# Descrição: Este script exclui uma branch específica de um repositório no
-#            Bitbucket usando a API do Bitbucket.
-# ==========================================================================
-
 import os
 import requests
 from dotenv import load_dotenv
