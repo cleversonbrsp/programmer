@@ -1,7 +1,7 @@
 from pytube import YouTube
 
 # Function to download YouTube video
-def download_video(url, output_path='D:\VIDEOS'):
+def download_video(url, output_path='C:/Users/cleve/Downloads'):
     try:
         yt = YouTube(url)
         # Get the highest resolution stream
