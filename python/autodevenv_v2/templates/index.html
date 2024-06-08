@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Bitbucket Branches</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+        .container h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .container form,
+        .container .branch-list,
+        .container .delete-all {
+            display: flex;
+            flex-direction: column;
+        }
+        .container label {
+            margin-bottom: 5px;
+            text-align: left;
+        }
+        .container select,
+        .container input {
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .container input[disabled] {
+            background-color: #e0e0e0;
+        }
+        .container button {
+            padding: 10px;
+            background-color: #0000FF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .container button:hover {
+            background-color: #0056b3;
+        }
+        .branch-list {
+            margin-top: 20px;
+        }
+        .branch-list button {
+            background-color: #FF0000;
+            margin-top: 5px;
+        }
+        .delete-all button {
+            background-color: #FF0000;
+            margin-top: 20px;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 18px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BitBucket Manage Branches</h1>
+        <form id="branchForm">
+            <label for="prefix">Escolha um Prefixo:</label>
+            <select id="prefix" name="prefix">
+                <option value="dev">dev</option>
+                <option value="prd">prd</option>
+                <option value="hml">hml</option>
+            </select>
+
+            <label for="branchName">Qual o nome da nova branch?</label>
+            <input type="text" id="branchName" name="branchName" required>
+
+            <button type="submit">Criar Branch</button>
+        </form>
+
+        <div id="result"></div>
+
+        <div class="branch-list" id="branchList">
+            <!-- Branches will be listed here -->
+        </div>
+
+        <div class="delete-all">
+            <button id="deleteAllBranches">Excluir Todas as Branches</button>
+        </div>
+    </div>
+
+    <script>
+        function deleteBranch(branchName) {
+            fetch('/delete_branch', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ branchName: branchName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result').innerText = data.message;
+                fetchBranches();
+            })
+            .catch(error => {
+                document.getElementById('result').innerText = 'Error: ' + error;
+            });
+        }
+
+        document.getElementById('branchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const prefix = document.getElementById('prefix').value;
+            const branchName = document.getElementById('branchName').value;
+
+            fetch('/create_branch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prefix: prefix, branchName: branchName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result').innerText = data.message || `Branch criada com sucesso!: ${data.branchName}`;
+                fetchBranches();
+            })
+            .catch(error => {
+                document.getElementById('result').innerText = 'Error: ' + error;
+            });
+        });
+
+        document.getElementById('branchName').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('branchForm').dispatchEvent(new Event('submit'));
+            }
+        });
+
+        document.getElementById('deleteAllBranches').addEventListener('click', function() {
+            fetch('/delete_all_branches', {
+                method: 'DELETE',
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result').innerText = data.message;
+                fetchBranches();
+            })
+            .catch(error => {
+                document.getElementById('result').innerText = 'Error: ' + error;
+            });
+        });
+
+        function fetchBranches() {
+            fetch(`/branches`)
+            .then(response => response.json())
+            .then(data => {
+                const branchList = document.getElementById('branchList');
+                branchList.innerHTML = '';
+                const branches = data.branches || [];
+                if (branches.length === 0 || (branches.length === 1 && (branches[0].name === 'main' || branches[0].name === 'master'))) {
+                    branchList.innerHTML = '<p>Não existe branches no momento.</p>';
+                } else {
+                    branches.forEach(branch => {
+                        if (branch.name !== 'main' && branch.name !== 'master') {
+                            const branchItem = document.createElement('div');
+                            branchItem.textContent = branch.name;
+                            const deleteButton = document.createElement('button');
+                            deleteButton.textContent = 'Delete';
+                            deleteButton.addEventListener('click', () => deleteBranch(branch.name));
+                            branchItem.appendChild(deleteButton);
+                            branchList.appendChild(branchItem);
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').innerText = 'Error: ' + error;
+            });
+        }
+
+        fetchBranches();
+    </script>
+</body>
+</html>
