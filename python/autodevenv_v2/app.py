@@ -30,6 +30,7 @@ def create_branch():
     data = request.json
     prefix = data.get('prefix')
     branch_name = data.get('branchName')
+    base_branch = data.get('baseBranch')
 
     suffix = generate_valid_suffix(6)
     full_branch_name = f"{prefix}-{branch_name}-{suffix}"
@@ -45,7 +46,7 @@ def create_branch():
     payload = {
         "name": full_branch_name,
         "target": {
-            "hash": os.environ.get("BITBUCKET_HASH"),
+            "hash": get_branch_hash(base_branch),
         }
     }
 
@@ -55,6 +56,19 @@ def create_branch():
         return jsonify({"message": f"Branch '{full_branch_name}' created successfully", "branchName": full_branch_name}), 201
     else:
         return jsonify({"error": response.text}), response.status_code
+
+def get_branch_hash(branch_name):
+    api_url = f"https://api.bitbucket.org/2.0/repositories/{workspace}/{repo_slug}/refs/branches/{branch_name}"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {access_token}"
+    }
+
+    response = requests.get(api_url, headers=headers)
+    if response.status_code == 200:
+        return response.json().get('target', {}).get('hash')
+    else:
+        raise Exception("Failed to get branch hash")
 
 @app.route('/branches', methods=['GET'])
 def list_branches():
@@ -68,27 +82,6 @@ def list_branches():
     if response.status_code == 200:
         branches = response.json().get('values', [])
         return jsonify({"branches": branches}), 200
-    else:
-        return jsonify({"error": response.text}), response.status_code
-
-@app.route('/delete_branch', methods=['DELETE'])
-def delete_branch():
-    data = request.json
-    branch_name = data.get('branchName')
-
-    if branch_name in ["main", "master"]:
-        return jsonify({"error": "Cannot delete 'main' or 'master' branch"}), 400
-
-    api_url = f"https://api.bitbucket.org/2.0/repositories/{workspace}/{repo_slug}/refs/branches/{branch_name}"
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {access_token}"
-    }
-
-    response
-    response = requests.delete(api_url, headers=headers)
-    if response.status_code == 204:
-        return jsonify({"message": f"Branch '{branch_name}' deleted successfully"}), 200
     else:
         return jsonify({"error": response.text}), response.status_code
 

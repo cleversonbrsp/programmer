@@ -60,10 +60,6 @@
         .branch-list {
             margin-top: 20px;
         }
-        .branch-list button {
-            background-color: #FF0000;
-            margin-top: 5px;
-        }
         .delete-all button {
             background-color: #FF0000;
             margin-top: 20px;
@@ -86,6 +82,11 @@
                 <option value="hml">hml</option>
             </select>
 
+            <label for="baseBranch">Escolha a Branch Base:</label>
+            <select id="baseBranch" name="baseBranch">
+                <!-- Branches will be populated here -->
+            </select>
+
             <label for="branchName">Qual o nome da nova branch?</label>
             <input type="text" id="branchName" name="branchName" required>
 
@@ -94,45 +95,24 @@
 
         <div id="result"></div>
 
-        <div class="branch-list" id="branchList">
-            <!-- Branches will be listed here -->
-        </div>
-
         <div class="delete-all">
-            <button id="deleteAllBranches">Excluir Todas as Branches</button>
+            <button id="deleteAllBranches">Limpar Branches<br>(Apenas a main será mantido)</button>
         </div>
     </div>
 
     <script>
-        function deleteBranch(branchName) {
-            fetch('/delete_branch', {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ branchName: branchName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('result').innerText = data.message;
-                fetchBranches();
-            })
-            .catch(error => {
-                document.getElementById('result').innerText = 'Error: ' + error;
-            });
-        }
-
         document.getElementById('branchForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const prefix = document.getElementById('prefix').value;
             const branchName = document.getElementById('branchName').value;
+            const baseBranch = document.getElementById('baseBranch').value;
 
             fetch('/create_branch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ prefix: prefix, branchName: branchName })
+                body: JSON.stringify({ prefix: prefix, branchName: branchName, baseBranch: baseBranch })
             })
             .then(response => response.json())
             .then(data => {
@@ -169,24 +149,15 @@
             fetch(`/branches`)
             .then(response => response.json())
             .then(data => {
-                const branchList = document.getElementById('branchList');
-                branchList.innerHTML = '';
+                const branchSelect = document.getElementById('baseBranch');
+                branchSelect.innerHTML = '';
                 const branches = data.branches || [];
-                if (branches.length === 0 || (branches.length === 1 && (branches[0].name === 'main' || branches[0].name === 'master'))) {
-                    branchList.innerHTML = '<p>Não existe branches no momento.</p>';
-                } else {
-                    branches.forEach(branch => {
-                        if (branch.name !== 'main' && branch.name !== 'master') {
-                            const branchItem = document.createElement('div');
-                            branchItem.textContent = branch.name;
-                            const deleteButton = document.createElement('button');
-                            deleteButton.textContent = 'Delete';
-                            deleteButton.addEventListener('click', () => deleteBranch(branch.name));
-                            branchItem.appendChild(deleteButton);
-                            branchList.appendChild(branchItem);
-                        }
-                    });
-                }
+                branches.forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.name;
+                    option.textContent = branch.name;
+                    branchSelect.appendChild(option);
+                });
             })
             .catch(error => {
                 document.getElementById('result').innerText = 'Error: ' + error;
