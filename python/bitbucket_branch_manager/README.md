@@ -1,4 +1,4 @@
 # Introduction
-The premise of this project consists of a simple frontend that allows users to interact with a FastAPI backend to create new branches in BitBucket, trigger the Jenkins pipeline, and deploy on Kubernetes (k8s).
+The foundation of this project is a straightforward frontend that enables users to interact with a backend automation service (FastAPI) to create new branches in BitBucket.
 # Diagram
 ![diagram](./img/4oOimage.png)
