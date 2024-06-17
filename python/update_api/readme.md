@@ -6,4 +6,4 @@
 4. Realizar testes e validações.
 5. Registrar histórico de versões.
 
-![diagram](./img/0_yx56nGMzcw4BOs2O.png)
+![diagram](./img/diagram.png)
