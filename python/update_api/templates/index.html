@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Update Automation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>API Update Automation</h1>
+    <form action="/update" method="post" enctype="multipart/form-data">
+        <label for="package">Upload Update Package:</label>
+        <input type="file" id="package" name="package" accept=".zip" required>
+        <button type="submit">Start Update</button>
+    </form>
+</body>
+</html>
