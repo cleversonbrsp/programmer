@@ -4,3 +4,5 @@
 # por "Fizz", múltiplos de 5 por "Buzz" e 
 # múltiplos de ambos por "FizzBuzz"
 ###########################################
+
+# logica: 
