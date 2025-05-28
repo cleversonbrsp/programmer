@@ -1,12 +1,34 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Script: download_and_convert.py
+# Descrição: Faz o download do arquivo .gz mais recente de um bucket na Oracle Cloud (OCI),
+#            descompacta o arquivo CSV e gera um relatório HTML usando o pgBadger.
+#
+# Requisitos:
+#   - Configuração válida no arquivo ~/.oci/config
+#   - SDK da Oracle OCI instalado (oci)
+#   - pgBadger instalado e acessível no PATH
+#
+# Autor: Cleverson (DevOps Engineer)
+# Data de criação: 26/05/2025
+# Versão: 1.0
+#
+# Uso:
+#   python3 download_and_convert.py
+#
+# Observação:
+#   Certifique-se de que o bucket contenha arquivos .csv.gz válidos gerados a partir dos logs do PostgreSQL.
+
 import oci
 import gzip
 import shutil
 import subprocess
 import os
 
-BUCKET_NAME = "log-postgresqldbsystem-prod"  # Substitua pelo nome real do bucket
-NAMESPACE = "grsmpvipzqfz"  # Substitua pelo namespace real
-DEST_DIR = "/home/cleverson/Downloads/tmp/log" # Substitua pelo diretório de destino desejado
+BUCKET_NAME = "Substitua pelo nome real do bucket"
+NAMESPACE = "Substitua pelo namespace real"
+DEST_DIR = "substitua pelo diretório de destino desejado"
 
 def get_latest_object(bucket_name, namespace):
     config = oci.config.from_file()
