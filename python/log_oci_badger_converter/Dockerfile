@@ -1,10 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Variáveis de ambiente
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Instala dependências do sistema e pgBadger
+# Atualiza os pacotes e instala dependências + pgbadger direto do apt
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gzip \
@@ -13,12 +13,9 @@ RUN apt-get update && apt-get install -y \
     perl \
     build-essential \
     git \
+    pgbadger \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala pgBadger
-RUN git clone https://github.com/darold/pgbadger.git /opt/pgbadger && \
-    cd /opt/pgbadger && \
-    make && make install
 
 # Cria diretório da aplicação
 WORKDIR /app

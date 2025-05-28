@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # Script: download_and_convert.py
 # Descrição: Faz o download do arquivo .gz mais recente de um bucket na Oracle Cloud (OCI),
@@ -14,8 +13,6 @@
 # Data de criação: 26/05/2025
 # Versão: 1.0
 #
-# Uso:
-#   python3 download_and_convert.py
 #
 # Observação:
 #   Certifique-se de que o bucket contenha arquivos .csv.gz válidos gerados a partir dos logs do PostgreSQL.
@@ -28,7 +25,7 @@ import os
 
 BUCKET_NAME = "log-postgresqldbsystem-prod"  # Substitua pelo nome real do bucket
 NAMESPACE = "grsmpvipzqfz"  # Substitua pelo namespace real
-DEST_DIR = "/home/cleverson/Downloads/tmp/log" # Substitua pelo diretório de destino desejado
+OUTPUT_DIR = "/app/output" # Substitua pelo diretório de saída desejado
 
 def get_latest_object(bucket_name, namespace):
     config = oci.config.from_file()
@@ -101,9 +98,9 @@ def run_pgbadger(csv_file, output_dir):
 def main():
     print("[*] Iniciando script...")
     latest_object = get_latest_object(BUCKET_NAME, NAMESPACE)
-    gz_path = download_object(BUCKET_NAME, NAMESPACE, latest_object, DEST_DIR)
+    gz_path = download_object(BUCKET_NAME, NAMESPACE, latest_object, OUTPUT_DIR)
     csv_path = extract_gz(gz_path)
-    html_report = run_pgbadger(csv_path, DEST_DIR)
+    html_report = run_pgbadger(csv_path, OUTPUT_DIR)
     print(f"[✓] Processo finalizado com sucesso: {html_report}")
 
 if __name__ == "__main__":
