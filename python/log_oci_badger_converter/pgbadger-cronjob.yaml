@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pgbadger-job
+spec:
+  schedule: "*/5 * * * *"  # A cada 5 minutos
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: pgbadger
+              image: <sua-imagem>:latest
+              env:
+                - name: OCI_CONFIG_FILE
+                  value: /root/.oci/config
+              volumeMounts:
+                - name: oci-config
+                  mountPath: /root/.oci
+                  readOnly: true
+          restartPolicy: OnFailure
+          volumes:
+            - name: oci-config
+              secret:
+                secretName: oci-config-secret
