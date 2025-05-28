@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import os
 
-BUCKET_NAME = "log-postgresqldbsystem-prod"  # Substitua pelo nome real do bucket
+BUCKET_NAME = "log-postgresqldbsystem-hom"  # Substitua pelo nome real do bucket
 NAMESPACE = "grsmpvipzqfz"  # Substitua pelo namespace real
 OUTPUT_DIR = "/app/output" # Substitua pelo diretório de saída desejado
 
