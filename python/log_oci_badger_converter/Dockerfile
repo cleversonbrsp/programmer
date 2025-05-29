@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 # Variáveis de ambiente
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -16,6 +16,10 @@ RUN apt-get update && apt-get install -y \
     pgbadger \
     && rm -rf /var/lib/apt/lists/*
 
+# Instala OCI CLI
+RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" \
+    -- --accept-all-defaults && \
+    ln -s /root/bin/oci /usr/local/bin/oci
 
 # Cria diretório da aplicação
 WORKDIR /app

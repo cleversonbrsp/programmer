@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbadger-config
+data:
+  config.yaml: |
+    bucket_name: log-postgresqldbsystem-hom
+    namespace: grsmpvipzqfz
+    output_dir: /app/output
+    upload_report: true
+    report_name: report.html
