@@ -1,0 +1,112 @@
+name: TESTE - Configuração do cluster OKE para o PGBadger no ambiente HOM
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+
+env:
+  OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+  OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+  OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+  OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+  OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+  ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+  NAMESPACE: hom
+
+jobs:
+  build-and-push:
+    name: Build e Push para o OCIR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Build da imagem Docker sem cache
+        run: docker build --no-cache -t pgbadger-cron-hom -f ./scripts/logs_pgbadger/Dockerfile ./scripts/logs_pgbadger
+
+      - name: Tag da imagem
+        run: docker tag pgbadger-cron-hom iad.ocir.io/grsmpvipzqfz/pgbadger-cron-hom:latest
+
+      - name: Login no OCIR
+        run: echo "${{ secrets.OCI_AUTH_TOKEN }}" | docker login iad.ocir.io -u "${{ secrets.OCI_USERNAME_DEPLOYER }}" --password-stdin
+
+      - name: Push para o OCIR
+        run: docker push iad.ocir.io/grsmpvipzqfz/pgbadger-cron-hom:latest
+
+  create-pvc:
+    name: Criar PVC para o PGBadger
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Criar PVC
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: pgbadger-output-pvc
+            namespace: $NAMESPACE
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+          EOF
+
+  apply-cronjob:
+    name: Aplicar CronJob do PGBadger
+    runs-on: ubuntu-latest
+    needs: create-pvc
+    steps:
+      - name: Secret de acesso ao OCIR
+        run: |
+          kubectl create secret docker-registry ocirsecret \
+            --docker-server=iad.ocir.io \
+            --docker-username=${{ secrets.OCI_USERNAME_DEPLOYER }} \
+            --docker-password="${{ secrets.OCI_AUTH_TOKEN }}" \
+            --docker-email=${{ secrets.OCI_DOCKER_EMAIL }} \
+            -n $NAMESPACE
+        continue-on-error: false
+
+      - name: Aplicar CronJob com volume persistente
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: pgbadger-cron-hom
+            namespace: $NAMESPACE
+          spec:
+            schedule: "*/5 * * * *"
+            jobTemplate:
+              spec:
+                template:
+                  spec:
+                    containers:
+                      - name: pgbadger
+                        image: iad.ocir.io/grsmpvipzqfz/pgbadger-cron-hom:latest
+                        imagePullPolicy: Always
+                        env:
+                          - name: OCI_CONFIG_FILE
+                            value: /root/.oci/config
+                        volumeMounts:
+                          - name: oci-config
+                            mountPath: /root/.oci
+                            readOnly: true
+                          - name: output-volume
+                            mountPath: /app/output
+                    restartPolicy: OnFailure
+                    volumes:
+                      - name: oci-config
+                        secret:
+                          secretName: oci-config-secret
+                      - name: output-volume
+                        persistentVolumeClaim:
+                          claimName: pgbadger-output-pvc
+                    imagePullSecrets:
+                      - name: ocirsecret
+          EOF

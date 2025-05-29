@@ -1,0 +1,2 @@
+# Ignorar todos os arquivos com 'secret' no nome dentro da pasta k8s
+python/log_oci_badger_converter/k8s/*secret*.yaml
