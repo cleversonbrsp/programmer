@@ -1,0 +1,107 @@
+name: Logs PostgreSQL com PGBadger
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Escolha o ambiente (0 = ambiente-0, 1 = ambiente-1, 2 = ambiente-2, 3 = ambiente-3)'
+        required: true
+        default: '1'
+      start_datetime:
+        description: 'Data/hora início (UTC) - formato: YYYY-MM-DD HH:MM'
+        required: true
+        default: '2025-05-28 04:00'
+      end_datetime:
+        description: 'Data/hora fim (UTC) - formato: YYYY-MM-DD HH:MM'
+        required: true
+        default: '2025-05-28 04:09'
+
+jobs:
+  preparar-ambiente:
+    name: Preparar Ambiente Python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v3
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Instalar dependências Python
+        run: |
+          pip install oci
+
+      - name: Gerar marcador de ambiente pronto # garantir que o job seguinte realmente espere o anterior
+        run: echo "ambiente pronto" > pronto.txt
+
+      - name: Salvar artefato de ambiente
+        uses: actions/upload-artifact@v4
+        with:
+          name: ambiente-python
+          path: pronto.txt
+
+  instalar-pgbadger:
+    name: Instalar pgbadger
+    runs-on: ubuntu-latest
+    needs: preparar-ambiente
+    steps:
+      - name: Baixar artefato do ambiente
+        uses: actions/download-artifact@v4
+        with:
+          name: ambiente-python
+
+      - name: Instalar pgbadger
+        run: |
+          sudo apt update
+          sudo apt install -y pgbadger
+
+  executar-analise:
+    name: Gerar Relatório com pgbadger
+    runs-on: ubuntu-latest
+    needs: instalar-pgbadger
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v3
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Instalar dependências Python
+        run: |
+          pip install oci
+
+      - name: Instalar pgbadger
+        run: |
+          sudo apt update
+          sudo apt install -y pgbadger
+
+      - name: Executar script do pgbadger
+        run: |
+          python3 scripts/logs_pgbadger/download-and-convert.py
+        env:
+          PG_ENV: ${{ github.event.inputs.environment }}
+          PG_START: ${{ github.event.inputs.start_datetime }}
+          PG_END: ${{ github.event.inputs.end_datetime }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+
+      - name: Publicar relatórios pgbadger
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-pgbadger
+          path: /tmp/pgbadger-output/*.html
+          compression-level: 9
+          retention-days: 2
