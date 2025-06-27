@@ -1,66 +1,110 @@
+# =============================================================================
+# PIPELINE GITHUB ACTIONS - ANÁLISE DE LOGS POSTGRESQL COM PGBADGER
+# =============================================================================
+# Este pipeline automatiza a análise de logs PostgreSQL armazenados no OCI
+# Object Storage, baixando logs em um intervalo específico e gerando
+# relatórios HTML usando o PGBadger.
+# =============================================================================
+
+# Nome do workflow que aparece na interface do GitHub Actions
 name: Logs PostgreSQL com PGBadger
 
+# =============================================================================
+# CONFIGURAÇÃO DE TRIGGER E INPUTS
+# =============================================================================
+# Define quando o pipeline será executado e quais parâmetros o usuário
+# pode configurar manualmente através da interface do GitHub Actions
 on:
+  # Permite execução manual do workflow através da interface web
   workflow_dispatch:
+    # Parâmetros que o usuário pode configurar ao executar o workflow
     inputs:
+      # Seleção do ambiente de banco de dados (0-3)
       environment:
         description: 'Escolha o ambiente (0 = ambiente-0, 1 = ambiente-1, 2 = ambiente-2, 3 = ambiente-3)'
         required: true
         default: '1'
+      # Data e hora de início para busca dos logs (formato UTC)
       start_datetime:
         description: 'Data/hora início (UTC) - formato: YYYY-MM-DD HH:MM'
         required: true
         default: '2025-05-28 04:00'
+      # Data e hora de fim para busca dos logs (formato UTC)
       end_datetime:
         description: 'Data/hora fim (UTC) - formato: YYYY-MM-DD HH:MM'
         required: true
         default: '2025-05-28 04:09'
 
+# =============================================================================
+# DEFINIÇÃO DOS JOBS (TAREFAS)
+# =============================================================================
+# O pipeline é dividido em 3 jobs sequenciais que preparam o ambiente,
+# instalam dependências e executam a análise
 jobs:
+  # =====================================================================
+  # JOB 1: PREPARAR AMBIENTE PYTHON
+  # =====================================================================
+  # Este job prepara o ambiente Python necessário para executar o script
   preparar-ambiente:
     name: Preparar Ambiente Python
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Executa no runner Ubuntu mais recente
     steps:
+      # Clona o repositório para ter acesso ao código fonte
       - name: Clonar repositório
         uses: actions/checkout@v3
 
+      # Instala Python 3.11 no runner
       - name: Instalar Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
 
+      # Instala a biblioteca OCI necessária para conectar com Oracle Cloud
       - name: Instalar dependências Python
         run: |
           pip install oci
 
+      # Cria um arquivo marcador para garantir sincronização entre jobs
       - name: Gerar marcador de ambiente pronto # garantir que o job seguinte realmente espere o anterior
         run: echo "ambiente pronto" > pronto.txt
 
+      # Salva o arquivo marcador como artefato para ser usado no próximo job
       - name: Salvar artefato de ambiente
         uses: actions/upload-artifact@v4
         with:
           name: ambiente-python
           path: pronto.txt
 
+  # =====================================================================
+  # JOB 2: INSTALAR PGBADGER
+  # =====================================================================
+  # Este job instala o PGBadger, ferramenta necessária para análise dos logs
   instalar-pgbadger:
     name: Instalar pgbadger
     runs-on: ubuntu-latest
-    needs: preparar-ambiente
+    needs: preparar-ambiente  # Só executa após o job anterior terminar
     steps:
+      # Baixa o artefato do job anterior para garantir sincronização
       - name: Baixar artefato do ambiente
         uses: actions/download-artifact@v4
         with:
           name: ambiente-python
 
+      # Instala o PGBadger via apt (gerenciador de pacotes do Ubuntu)
       - name: Instalar pgbadger
         run: |
           sudo apt update
           sudo apt install -y pgbadger
 
+  # =====================================================================
+  # JOB 3: EXECUTAR ANÁLISE E GERAR RELATÓRIOS
+  # =====================================================================
+  # Este é o job principal que executa o script Python e gera os relatórios
   executar-analise:
     name: Gerar Relatório com pgbadger
     runs-on: ubuntu-latest
-    needs: instalar-pgbadger
+    needs: instalar-pgbadger  # Só executa após instalar o PGBadger
+    # Configuração das variáveis de ambiente OCI (credenciais)
     env:
       OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
       OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
@@ -68,40 +112,60 @@ jobs:
       OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
       OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
     steps:
+      # Clona o repositório novamente (cada job roda em um runner isolado)
       - name: Clonar repositório
         uses: actions/checkout@v3
 
+      # Instala Python 3.11 no runner atual
       - name: Instalar Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
 
+      # Instala a biblioteca OCI para conexão com Oracle Cloud
       - name: Instalar dependências Python
         run: |
           pip install oci
 
+      # Instala o PGBadger no runner atual
       - name: Instalar pgbadger
         run: |
           sudo apt update
           sudo apt install -y pgbadger
 
+      # =============================================================
+      # EXECUÇÃO PRINCIPAL DO SCRIPT
+      # =============================================================
+      # Executa o script Python que:
+      # 1. Conecta ao OCI Object Storage
+      # 2. Busca logs no intervalo especificado
+      # 3. Baixa e descompacta os arquivos
+      # 4. Executa PGBadger para gerar relatórios HTML
       - name: Executar script do pgbadger
         run: |
-          python3 scripts/logs_pgbadger/download-and-convert.py
+          python3 scripts/oci_pgbadger_logs/pgbadger_logs.py
+        # Passa as variáveis de ambiente necessárias para o script
         env:
+          # Parâmetros do usuário (inputs do workflow)
           PG_ENV: ${{ github.event.inputs.environment }}
           PG_START: ${{ github.event.inputs.start_datetime }}
           PG_END: ${{ github.event.inputs.end_datetime }}
+          # Credenciais OCI (secrets do repositório)
           OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
           OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
           OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
           OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
           OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
 
+      # =============================================================
+      # PUBLICAÇÃO DOS RELATÓRIOS
+      # =============================================================
+      # Salva os relatórios HTML gerados como artefatos do workflow
+      # para que possam ser baixados pelo usuário
       - name: Publicar relatórios pgbadger
         uses: actions/upload-artifact@v4
         with:
-          name: relatorios-pgbadger
-          path: /tmp/pgbadger-output/*.html
-          compression-level: 9
-          retention-days: 2
+          name: relatorios-pgbadger  # Nome do artefato
+          path: /tmp/pgbadger-output/*.html  # Caminho dos arquivos HTML
+          compression-level: 9  # Máxima compressão para economizar espaço
+          retention-days: 2  # Mantém os artefatos por 2 dias
