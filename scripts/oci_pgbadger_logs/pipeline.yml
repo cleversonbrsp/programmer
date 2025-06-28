@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Escolha o ambiente (0 = pg-connect-navita-allprod, 1 = pg-connect-vivo, 2 = pg-connect-navita-hom-equalizacao, 3 = pg-connect-telefonica)'
+        description: 'Escolha o ambiente (0 = nome-do-ambiente-0, 1 = nome-do-ambiente-1, ....)'
         required: true
         default: '1'
       start_datetime:
@@ -16,7 +16,7 @@ on:
       end_datetime:
         description: 'Data/hora fim (UTC) - formato: YYYY-MM-DD HH:MM'
         required: true
-        default: '2025-05-28 04:09' # Este padrão é 1 arquivo para vivo - usado pra teste.
+        default: '2025-05-28 04:09'
 
 jobs:
   pgbadger-report:
