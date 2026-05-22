@@ -1,90 +1,106 @@
-// Package main define o ponto de entrada da aplicação.
-// Esta é uma aplicação de exemplo que integra autenticação OAuth2/OpenID Connect
-// com o Keycloak, usando redirecionamento para login e callback de código de autorização.
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "net/http"
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
 
-    "golang.org/x/oauth2"
+	oidc "github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 )
 
-// Credenciais da aplicação que foram registradas no Keycloak.
-// Em produção, estes valores devem vir de variáveis de ambiente ou de um cofre secreto.
+// ClientID e ClientSecret são as credenciais que você cadastrou no Keycloak
+// para a aplicação "app". Sem elas o Keycloak não sabe qual app está pedindo login
+// e não libera a troca do código de autorização por tokens.
 var (
-    clientID     = "app"
-    clientSecret = "..."
+	ClientID     = "app"
+	ClientSecret = "..."
 )
 
 func main() {
-    // Contexto base para chamadas de rede com o Keycloak.
-    ctx := context.Background()
+	// O contexto carrega cancelamento/timeout para chamadas HTTP.
+	// Usamos Background() aqui porque o programa inteiro depende dessas requisições
+	// e não há um request HTTP "pai" ainda — o main é o ponto de partida.
+	ctx := context.Background()
 
-    // Configura o fluxo OAuth2 para esta aplicação.
-    // Usamos here os endpoints padrão do Keycloak para OpenID Connect.
-    // O RedirectURL deve corresponder exatamente ao callback cadastrado no Keycloak.
-    config := oauth2.Config{
-        ClientID:     clientID,
-        ClientSecret: clientSecret,
-        Endpoint: oauth2.Endpoint{
-            AuthURL:  "http://localhost:8080/realms/demo/protocol/openid-connect/auth",
-            TokenURL: "http://localhost:8080/realms/demo/protocol/openid-connect/token",
-        },
-        RedirectURL: "http://localhost:8081/auth/callback",
-        Scopes:      []string{"openid", "profile", "email", "roles"},
-    }
+	// Antes de redirecionar o usuário, precisamos descobrir onde o Keycloak expõe
+	// login (auth) e troca de token (token). O NewProvider lê o .well-known do realm
+	// e monta isso automaticamente, em vez de você copiar URLs na mão e quebrar
+	// quando mudar versão ou path (/auth/realms/...).
+	provider, err := oidc.NewProvider(ctx, "http://localhost:8080/auth/realms/demo")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    // Valor estático de exemplo para proteger o fluxo contra CSRF.
-    // Em uma aplicação real, esse valor deve ser gerado dinamicamente por usuário/sessão.
-    state := "exemplo"
+	// Aqui descrevemos "quem somos" no OAuth2: qual app, para onde voltar após login
+	// e quais dados pedimos (openid, perfil, e-mail, roles). O Endpoint vem do provider
+	// porque o Keycloak já publicou as URLs corretas na descoberta OIDC acima.
+	config := oauth2.Config{
+		ClientID:     ClientID,
+		ClientSecret: ClientSecret,
+		Endpoint:     provider.Endpoint(),
+		RedirectURL:  "http://localhost:8081/auth/callback",
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "roles"},
+	}
 
-    // Define a rota raiz "/".
-    // Quando um usuário acessa esta rota, ele é redirecionado para o Keycloak
-    // para iniciar o fluxo de login via OpenID Connect.
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        authCodeURL := config.AuthCodeURL(state)
-        http.Redirect(w, r, authCodeURL, http.StatusFound)
-    })
+	// O state é um valor que nós geramos e o Keycloak devolve no callback.
+	// Quando o usuário volta, comparamos: se for diferente, alguém pode estar
+	// forjando o redirect (ataque CSRF). Neste exemplo é fixo ("exemplo"); em produção
+	// você geraria um valor aleatório por sessão e guardaria (cookie/memória).
+	state := "exemplo"
 
-    // Define o callback que o Keycloak deve chamar após o login do usuário.
-    // Este caminho deve ser exatamente igual ao RedirectURL configurado acima.
-    http.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
-        if err := r.ParseForm(); err != nil {
-            http.Error(w, "falha ao ler parâmetros de callback", http.StatusBadRequest)
-            return
-        }
+	// Quando o usuário acessa http://localhost:8081/ no navegador, ainda não está
+	// logado nesta app. Por isso não mostramos uma página local: montamos a URL de
+	// autorização do Keycloak (AuthCodeURL) e redirecionamos (302). O usuário passa
+	// a ver a tela de login do IdP; depois de autenticar, o Keycloak o manda de volta
+	// para /auth/callback com ?code=...&state=...
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, config.AuthCodeURL(state), http.StatusFound)
+	})
 
-        // Verifica se o state retornado pelo Keycloak é o mesmo que mandamos.
-        // Isso protege contra requisições falsas ou redirecionamentos maliciosos.
-        if r.Form.Get("state") != state {
-            http.Error(w, "state não corresponde", http.StatusBadRequest)
-            return
-        }
+	// Esta rota só é chamada depois que o usuário logou no Keycloak. O navegador chega
+	// com code (autorização temporária) e state na query string.
+	http.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
+		// Primeiro conferimos o state: tem que ser o mesmo que enviamos no "/".
+		// Se não bater, ignoramos a requisição porque não confiamos na origem do redirect.
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "State doesnt match", http.StatusBadRequest)
+			return
+		}
 
-        // Recebe o código de autorização enviado pelo Keycloak.
-        code := r.Form.Get("code")
-        if code == "" {
-            http.Error(w, "código de autorização ausente", http.StatusBadRequest)
-            return
-        }
+		// O code sozinho não autentica nada — é só um ticket de uso único. Trocamos
+		// ele por access_token (e refresh, se houver) fazendo POST no endpoint de token
+		// do Keycloak, usando ClientID/Secret e RedirectURL cadastrados.
+		oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
+		if err != nil {
+			http.Error(w, "problema ao trocar token", http.StatusInternalServerError)
+			return
+		}
 
-        // Troca o código de autorização por um token de acesso/ID token.
-        // O pacote oauth2 já faz a requisição correta ao endpoint de token.
-        token, err := config.Exchange(ctx, code)
-        if err != nil {
-            http.Error(w, "erro ao trocar código pelo token", http.StatusInternalServerError)
-            return
-        }
+		// No fluxo OpenID Connect, além do access token vem o id_token (JWT com claims
+		// do usuário). A biblioteca oauth2 guarda isso em Extra("id_token"); aqui só
+		// extraímos a string para exibir no JSON de resposta deste exemplo.
+		idToken, ok := oauth2Token.Extra("id_token").(string)
+		if !ok {
+			http.Error(w, "problema ao pegar id token", http.StatusInternalServerError)
+			return
+		}
 
-        // Aqui, poderia ser feito o parse do ID token e verificação adicional,
-        // mas para este exemplo apenas mostramos que a troca foi bem-sucedida.
-        fmt.Fprintf(w, "Login bem-sucedido! Token de acesso: %s", token.AccessToken)
-    })
+		// Montamos um JSON legível com os tokens para você inspecionar no browser
+		// (aula/demo). Em produção você validaria o id_token, criaria sessão, etc.
+		res := struct {
+			OAuth2Token *oauth2.Token
+			IDToken     string
+		}{
+			oauth2Token, idToken,
+		}
 
-    // Inicia o servidor HTTP na porta 8081.
-    // Se o servidor não iniciar, a aplicação será encerrada com erro.
-    log.Fatal(http.ListenAndServe(":8081", nil))
+		data, _ := json.MarshalIndent(res, "", "  ")
+		w.Write(data)
+	})
+
+	// Escutamos na porta 8081 porque o RedirectURL e o client no Keycloak apontam
+	// para http://localhost:8081/auth/callback — tem que ser a mesma origem.
+	log.Fatal(http.ListenAndServe(":8081", nil))
 }
