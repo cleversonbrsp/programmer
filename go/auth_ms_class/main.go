@@ -27,8 +27,8 @@ func main() {
 	// Antes de redirecionar o usuário, precisamos descobrir onde o Keycloak expõe
 	// login (auth) e troca de token (token). O NewProvider lê o .well-known do realm
 	// e monta isso automaticamente, em vez de você copiar URLs na mão e quebrar
-	// quando mudar versão ou path (/auth/realms/...).
-	provider, err := oidc.NewProvider(ctx, "http://localhost:8080/auth/realms/demo")
+	// quando mudar versão ou path. Keycloak 17+ usa /realms/...; versões antigas usavam /auth/realms/...
+	provider, err := oidc.NewProvider(ctx, "http://localhost:8080/realms/demo")
 	if err != nil {
 		log.Fatal(err)
 	}
